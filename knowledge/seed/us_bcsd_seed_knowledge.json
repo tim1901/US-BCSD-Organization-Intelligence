@@ -1,0 +1,37 @@
+{
+  "organization": {
+    "slug": "us-bcsd",
+    "name": "United States Business Council for Sustainable Development"
+  },
+  "domains": [
+    "ecosystems",
+    "energy",
+    "carbon",
+    "materials_circularity",
+    "water",
+    "equity_social_impact"
+  ],
+  "initiatives": [
+    "Carbon Collaborative",
+    "Small Landowners Carbon Collaborative",
+    "Materials Marketplace",
+    "Water work",
+    "Energy Efficiency in Buildings"
+  ],
+  "context": [
+    "historical case-study patterns",
+    "2026 Annual Meeting context",
+    "emerging interests",
+    "open questions",
+    "high-value signal criteria",
+    "opportunity patterns",
+    "executive communication style",
+    "guardrails"
+  ],
+  "policy": {
+    "foundational_context": true,
+    "hard_coded_prompt": false,
+    "provenance_required": true,
+    "versioning_required": true
+  }
+}

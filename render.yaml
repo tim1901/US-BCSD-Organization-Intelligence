@@ -1,0 +1,67 @@
+services:
+  - type: web
+    name: us-bcsd-intelligence-web
+    runtime: python
+    plan: starter
+    region: frankfurt
+    buildCommand: pip install .
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+      - key: SLACK_APP_TOKEN
+        sync: false
+      - key: SLACK_WORKSPACE_ID
+        sync: false
+
+  - type: worker
+    name: us-bcsd-intelligence-worker
+    runtime: python
+    plan: starter
+    region: frankfurt
+    buildCommand: pip install .
+    startCommand: python -m app.orchestration.worker
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+      - key: SLACK_WORKSPACE_ID
+        sync: false
+
+  - type: cron
+    name: us-bcsd-intelligence-cron
+    runtime: python
+    schedule: "0 * * * *"
+    plan: starter
+    region: frankfurt
+    buildCommand: pip install .
+    startCommand: python -m app.orchestration.scheduler
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
