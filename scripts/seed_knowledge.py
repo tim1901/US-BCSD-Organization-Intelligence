@@ -9,6 +9,7 @@ database is the canonical memory.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -20,7 +21,7 @@ from app.core.config import settings
 from app.core.ids import sha256_text
 from app.ingestion.extractors import KnowledgeExtractor
 from app.ingestion.normalizer import normalize_text
-from app.storage.supabase import connection
+from app.storage.supabase import close_pool, connection
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -31,19 +32,25 @@ EMBEDDING_VERSION = "gemini-embedding-v1"
 
 
 def _chunk_markdown(content: str) -> list[tuple[str, str]]:
-    """Create deterministic paragraph/section chunks while preserving source spans."""
+    """Create deterministic section chunks while preserving headings as provenance spans."""
     chunks: list[tuple[str, str]] = []
-    current_heading = ""
-    for block in (part.strip() for part in content.split("\\n\\n")):
-        if not block:
-            continue
-        if block.startswith("#"):
-            current_heading = block.lstrip("# ").strip()
-            chunks.append((block, current_heading or "heading"))
-        else:
-            span = current_heading or "body"
-            chunks.append((block, span))
-    return chunks
+    current_heading = "document"
+    current_lines: list[str] = []
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            if current_lines:
+                chunks.append(("\\n".join(current_lines).strip(), current_heading))
+                current_lines = []
+            current_heading = re.sub(r"^#+\\s*", "", stripped).strip() or "heading"
+        elif stripped:
+            current_lines.append(stripped)
+
+    if current_lines:
+        chunks.append(("\\n".join(current_lines).strip(), current_heading))
+
+    return [(text, span) for text, span in chunks if text]
 
 
 def _vector_literal(values: list[float]) -> str:
@@ -63,12 +70,39 @@ def _load_existing_source(conn, organization_id: str, content_hash: str):
     ).fetchone()
 
 
-def _already_seeded(conn, source_id: str) -> bool:
-    row = conn.execute(
+def _seed_state(conn, source_id: str) -> tuple[int, int]:
+    knowledge = conn.execute(
         "SELECT COUNT(*) AS count FROM knowledge_items WHERE source_id = %s",
         (source_id,),
     ).fetchone()
-    return bool(row and row["count"] > 0)
+    chunks = conn.execute(
+        """
+        SELECT COUNT(*) AS count
+        FROM source_chunks sc
+        JOIN source_documents sd ON sd.id = sc.source_document_id
+        WHERE sd.source_id = %s
+        """,
+        (source_id,),
+    ).fetchone()
+    return int(knowledge["count"] if knowledge else 0), int(chunks["count"] if chunks else 0)
+
+
+def _cleanup_seed_artifacts(conn, source_id: str) -> None:
+    conn.execute(
+        """
+        DELETE FROM embeddings
+        WHERE metadata ->> 'source_id' = %s
+        """,
+        (source_id,),
+    )
+    conn.execute(
+        "DELETE FROM knowledge_items WHERE source_id = %s",
+        (source_id,),
+    )
+    conn.execute(
+        "DELETE FROM source_documents WHERE source_id = %s",
+        (source_id,),
+    )
 
 
 def _get_organization_id(conn) -> str:
@@ -86,7 +120,7 @@ def _extract(content: str) -> ExtractionSchema:
     return extractor.extract(content)
 
 
-def main() -> None:
+def _run_seed() -> None:
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL is not configured")
     if not settings.gemini_api_key:
@@ -110,9 +144,18 @@ def main() -> None:
     with connection() as conn:
         organization_id = _get_organization_id(conn)
         existing = _load_existing_source(conn, organization_id, content_hash)
-        if existing and _already_seeded(conn, str(existing["id"])):
-            print(f"[SEED] already ingested source_id={existing['id']}; nothing to do")
-            return
+        if existing:
+            existing_id = str(existing["id"])
+            knowledge_count, chunk_count = _seed_state(conn, existing_id)
+            if knowledge_count > 0 and chunk_count == len(chunks):
+                print(f"[SEED] already ingested source_id={existing_id}; nothing to do")
+                return
+            if knowledge_count > 0 or chunk_count > 0:
+                print(
+                    f"[SEED] existing source is incomplete (chunks={chunk_count}, "
+                    f"knowledge_items={knowledge_count}); rebuilding derived memory"
+                )
+                _cleanup_seed_artifacts(conn, existing_id)
 
     print("[EXTRACT] extracting structured knowledge with Gemini")
     extraction = _extract(normalized.content)
@@ -137,10 +180,6 @@ def main() -> None:
         existing = _load_existing_source(conn, organization_id, content_hash)
         if existing:
             source_id = str(existing["id"])
-            if _already_seeded(conn, source_id):
-                print(f"[SEED] another run completed ingestion source_id={source_id}; nothing to do")
-                return
-            conn.execute("DELETE FROM source_documents WHERE source_id = %s", (source_id,))
         else:
             conn.execute(
                 """
@@ -275,6 +314,13 @@ def main() -> None:
             f"chunks={len(chunks)} knowledge_items={len(extraction.knowledge_objects)} "
             f"embedding_dimensions={len(chunk_embeddings[0]) if chunk_embeddings else settings.gemini_embedding_dimensions}"
         )
+
+
+def main() -> None:
+    try:
+        _run_seed()
+    finally:
+        close_pool()
 
 
 if __name__ == "__main__":
