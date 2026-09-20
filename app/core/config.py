@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     gemini_embedding_model: str = Field(default="gemini-embedding-001", alias="GEMINI_EMBEDDING_MODEL")
     gemini_embedding_dimensions: int = Field(default=3072, alias="GEMINI_EMBEDDING_DIMENSIONS")
 
+    memory_retrieval_limit: int = Field(default=8, alias="MEMORY_RETRIEVAL_LIMIT")
+    memory_min_similarity: float = Field(default=0.15, alias="MEMORY_MIN_SIMILARITY")
+
     slack_bot_token: str = Field(default="", alias="SLACK_BOT_TOKEN")
     slack_signing_secret: str = Field(default="", alias="SLACK_SIGNING_SECRET")
     slack_app_token: str = Field(default="", alias="SLACK_APP_TOKEN")
