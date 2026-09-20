@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     memory_min_similarity: float = Field(default=0.15, alias="MEMORY_MIN_SIMILARITY")
 
     slack_bot_token: str = Field(default="", alias="SLACK_BOT_TOKEN")
+    slack_user_token: str = Field(default="", alias="SLACK_USER_TOKEN")
     slack_signing_secret: str = Field(default="", alias="SLACK_SIGNING_SECRET")
     slack_app_token: str = Field(default="", alias="SLACK_APP_TOKEN")
     slack_workspace_id: str = Field(default="", alias="SLACK_WORKSPACE_ID")
