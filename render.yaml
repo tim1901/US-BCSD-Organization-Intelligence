@@ -22,8 +22,6 @@ services:
         sync: false
       - key: SLACK_SIGNING_SECRET
         sync: false
-      - key: SLACK_APP_TOKEN
-        sync: false
       - key: SLACK_WORKSPACE_ID
         sync: false
 
