@@ -609,7 +609,7 @@ class SlackIngestionService:
         channel_id: str,
         thread_ts: str,
         channel_name: str,
-        source_id: str,
+        source_id: str | None,
         messages: list[dict[str, Any]],
     ) -> None:
         with connection(organization_id) as conn:
@@ -725,7 +725,7 @@ class SlackIngestionService:
             channel_id,
             thread_ts,
             channel_name,
-            "",
+            None,
             messages,
         )
 
