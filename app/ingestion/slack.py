@@ -457,6 +457,10 @@ class SlackIngestionService:
     ) -> None:
         extraction = self.extractor.extract(combined_text)
         embedding = self.embeddings.embed(combined_text)
+        knowledge_embeddings = [
+            self.embeddings.embed(obj.statement.strip())
+            for obj in extraction.knowledge_objects
+        ]
         document_id = str(uuid4())
         chunk_id = str(uuid4())
         vector = _vector_literal(embedding)
@@ -546,10 +550,9 @@ class SlackIngestionService:
                 ),
             )
 
-            for obj in extraction.knowledge_objects:
+            for obj, knowledge_embedding in zip(extraction.knowledge_objects, knowledge_embeddings):
                 knowledge_id = str(uuid4())
                 statement = obj.statement.strip()
-                knowledge_embedding = self.embeddings.embed(statement)
                 conn.execute(
                     """
                     INSERT INTO knowledge_items(
