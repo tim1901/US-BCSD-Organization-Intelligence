@@ -41,9 +41,9 @@ def _chunk_markdown(content: str) -> list[tuple[str, str]]:
         stripped = line.strip()
         if stripped.startswith("#"):
             if current_lines:
-                chunks.append(("\\n".join(current_lines).strip(), current_heading))
+                chunks.append(("\n".join(current_lines).strip(), current_heading))
                 current_lines = []
-            current_heading = re.sub(r"^#+\\s*", "", stripped).strip() or "heading"
+            current_heading = re.sub(r"^#+\s*", "", stripped).strip() or "heading"
         elif stripped:
             current_lines.append(stripped)
 
