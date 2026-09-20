@@ -26,3 +26,10 @@ def connection(organization_id: str | None = None):
             if organization_id:
                 conn.execute("select set_config('app.current_organization_id', %s, true)", (organization_id,))
             yield conn
+
+
+def close_pool() -> None:
+    global _pool
+    if _pool is not None:
+        _pool.close()
+        _pool = None
