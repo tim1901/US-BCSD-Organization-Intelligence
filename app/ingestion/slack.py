@@ -160,15 +160,22 @@ class SlackIngestionService:
 
         payload = row["raw_payload"]
         event = payload.get("event", {})
-        channel_id = event.get("channel")
+        message = event.get("message") or event
+        channel_id = event.get("channel") or message.get("channel")
         event_type = event.get("type")
-        channel_type = event.get("channel_type")
+        channel_type = event.get("channel_type") or message.get("channel_type")
 
         if event_type != "message" or channel_type not in {"channel", "group"} or not channel_id:
             self._mark_event(event_id, "ignored", None)
             return
 
-        thread_ts = str(event.get("thread_ts") or event.get("ts") or "")
+        thread_ts = str(
+            event.get("thread_ts")
+            or event.get("ts")
+            or message.get("thread_ts")
+            or message.get("ts")
+            or ""
+        )
         if not thread_ts:
             self._mark_event(event_id, "ignored", "missing_thread_ts")
             return
