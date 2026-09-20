@@ -21,8 +21,9 @@ class SlackClient:
 
     base_url = "https://slack.com/api/"
 
-    def __init__(self, token: str | None = None):
+    def __init__(self, token: str | None = None, user_token: str | None = None):
         self.token = token or settings.slack_bot_token
+        self.user_token = user_token or settings.slack_user_token
         if not self.token:
             raise RuntimeError("SLACK_BOT_TOKEN is not configured")
         self.client = httpx.Client(
@@ -30,16 +31,38 @@ class SlackClient:
             timeout=httpx.Timeout(30.0, connect=10.0),
             headers={"Authorization": f"Bearer {self.token}"},
         )
+        self.user_client = (
+            httpx.Client(
+                base_url=self.base_url,
+                timeout=httpx.Timeout(30.0, connect=10.0),
+                headers={"Authorization": f"Bearer {self.user_token}"},
+            )
+            if self.user_token
+            else None
+        )
 
     def close(self) -> None:
         self.client.close()
+        if self.user_client:
+            self.user_client.close()
 
-    def _call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _call(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        use_user_token: bool = False,
+    ) -> dict[str, Any]:
         params = {key: value for key, value in (params or {}).items() if value is not None}
+        client = self.user_client if use_user_token else self.client
+        if client is None:
+            raise RuntimeError(
+                "SLACK_USER_TOKEN is required for conversations.replies on public/private channels"
+            )
         attempts = 0
         while True:
             attempts += 1
-            response = self.client.post(method, data=params)
+            response = client.post(method, data=params)
             if response.status_code == 429:
                 retry_after = int(response.headers.get("Retry-After", "5"))
                 if attempts >= settings.slack_api_max_retries:
@@ -63,13 +86,14 @@ class SlackClient:
         collection_key: str,
         params: dict[str, Any] | None = None,
         limit: int = 200,
+        use_user_token: bool = False,
     ) -> list[dict[str, Any]]:
         cursor: str | None = None
         items: list[dict[str, Any]] = []
         while True:
             page_params = dict(params or {})
             page_params.update({"limit": limit, "cursor": cursor})
-            payload = self._call(method, page_params)
+            payload = self._call(method, page_params, use_user_token=use_user_token)
             page = payload.get(collection_key, [])
             if isinstance(page, list):
                 items.extend(page)
@@ -106,4 +130,5 @@ class SlackClient:
             collection_key="messages",
             params={"channel": channel_id, "ts": thread_ts, "include_all_metadata": True},
             limit=100,
+            use_user_token=True,
         )
