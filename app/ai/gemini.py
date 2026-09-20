@@ -22,7 +22,11 @@ class GeminiProvider(AIProvider):
         if system_instruction:
             kwargs['system_instruction'] = system_instruction
         if response_schema:
-            kwargs['response_format'] = response_schema
+            kwargs['response_format'] = {
+                'type': 'text',
+                'mime_type': 'application/json',
+                'schema': response_schema,
+            }
         if use_search_grounding:
             kwargs['tools'] = [types.Tool(google_search=types.GoogleSearch())]
         return self.client.interactions.create(**kwargs)
