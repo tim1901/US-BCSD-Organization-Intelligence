@@ -25,10 +25,13 @@ class Settings(BaseSettings):
     memory_min_similarity: float = Field(default=0.15, alias="MEMORY_MIN_SIMILARITY")
 
     slack_bot_token: str = Field(default="", alias="SLACK_BOT_TOKEN")
+    slack_user_token: str = Field(default="", alias="SLACK_USER_TOKEN")
     slack_signing_secret: str = Field(default="", alias="SLACK_SIGNING_SECRET")
     slack_app_token: str = Field(default="", alias="SLACK_APP_TOKEN")
     slack_workspace_id: str = Field(default="", alias="SLACK_WORKSPACE_ID")
     slack_workspace_name: str = Field(default="", alias="SLACK_WORKSPACE_NAME")
+    slack_api_max_retries: int = Field(default=5, alias="SLACK_API_MAX_RETRIES")
+    slack_min_text_chars: int = Field(default=20, alias="SLACK_MIN_TEXT_CHARS")
 
     max_slack_event_age_seconds: int = Field(default=300, alias="MAX_SLACK_EVENT_AGE_SECONDS")
     max_request_body_bytes: int = Field(default=1_000_000, alias="MAX_REQUEST_BODY_BYTES")
