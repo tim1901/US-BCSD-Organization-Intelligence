@@ -10,6 +10,10 @@ logger=logging.getLogger(__name__)
 
 def process_job(job: dict):
     job_type = job["job_type"]
+    payload = job.get("payload") or {}
+    if not isinstance(payload, dict):
+        raise ValueError(f"Job payload must be an object, got {type(payload).__name__}")
+    job_data = {**job, **payload}
     logger.info("Processing job %s type=%s", job["id"], job_type)
 
     if job_type in {"backfill_slack_channel", "ingest_slack_thread", "ingest_slack_event"}:
@@ -17,18 +21,18 @@ def process_job(job: dict):
         service = SlackIngestionService(slack=client)
         try:
             if job_type == "backfill_slack_channel":
-                count = service.backfill_channel(job)
+                count = service.backfill_channel(job_data)
                 logger.info("Slack channel backfill queued %s thread jobs", count)
             elif job_type == "ingest_slack_thread":
                 source_id = service.ingest_thread(
-                    organization_id=str(job["organization_id"]),
-                    workspace_id=str(job["workspace_id"]),
-                    channel_id=str(job["channel_id"]),
-                    thread_ts=str(job["thread_ts"]),
+                    organization_id=str(job_data["organization_id"]),
+                    workspace_id=str(job_data["workspace_id"]),
+                    channel_id=str(job_data["channel_id"]),
+                    thread_ts=str(job_data["thread_ts"]),
                 )
                 logger.info("Slack thread ingested source_id=%s", source_id or "message-only")
             else:
-                service.ingest_event(job)
+                service.ingest_event(job_data)
         finally:
             client.close()
         return
