@@ -99,3 +99,25 @@ This means the HTTP request path remains lightweight and the Gemini/database wor
 - Slack source records retain channel/thread identifiers for provenance.
 - The organization database remains the canonical memory store.
 - Gemini organizational calls remain stateless; the database stores the resulting memory.
+
+
+## 8. Slack Brain command
+
+The application also exposes a Slack slash command for asking the organizational Brain without leaving Slack.
+
+In Slack App Settings → Slash Commands, create:
+
+- Command: `/us-bcsd`
+- Request URL: `https://us-bcsd-intelligence-web.onrender.com/api/slack/command`
+
+Example usage inside a public or private channel:
+
+```
+/us-bcsd What has happened recently in #random?
+```
+
+The HTTP endpoint acknowledges the slash command immediately and queues a `slack_brain_command` job. The Render worker performs memory retrieval and Gemini reasoning, then sends the answer back through Slack's command response URL.
+
+When the command is invoked from a channel, the Brain uses that Slack channel ID as a hard retrieval scope. This prevents a question asked in `#random` from retrieving unrelated Slack memory from another channel.
+
+Direct messages are intentionally excluded from this first Slack Brain interface.

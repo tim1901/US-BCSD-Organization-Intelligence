@@ -8,7 +8,7 @@ def _vector_literal(values: list[float]) -> str:
 
 
 class SemanticSearch:
-    """Organization-scoped pgvector retrieval with provenance fields."""
+    """Organization-scoped pgvector retrieval with provenance and optional Slack channel scoping."""
 
     def __init__(self, organization_id: str):
         self.organization_id = organization_id
@@ -19,6 +19,7 @@ class SemanticSearch:
         *,
         limit: int = 10,
         min_similarity: float = 0.0,
+        channel_id: str | None = None,
     ) -> list[dict]:
         vector = _vector_literal(embedding)
         with connection(self.organization_id) as conn:
@@ -52,6 +53,13 @@ class SemanticSearch:
                 WHERE e.organization_id = %(organization_id)s
                   AND e.object_type IN ('knowledge_item', 'source_chunk')
                   AND 1 - (e.embedding <=> %(embedding)s::vector) >= %(min_similarity)s
+                  AND (
+                      %(channel_id)s IS NULL
+                      OR COALESCE(
+                          sk.metadata ->> 'channel_id',
+                          ss.metadata ->> 'channel_id'
+                      ) = %(channel_id)s
+                  )
                 ORDER BY e.embedding <=> %(embedding)s::vector
                 LIMIT %(limit)s
                 """,
@@ -59,6 +67,7 @@ class SemanticSearch:
                     "embedding": vector,
                     "organization_id": self.organization_id,
                     "min_similarity": min_similarity,
+                    "channel_id": channel_id,
                     "limit": limit,
                 },
             ).fetchall()
