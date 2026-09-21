@@ -10,6 +10,7 @@ from app.brain.gap_detection import KnowledgeGapDetector
 from app.brain.planner import BrainPlanner
 from app.brain.reasoning import ReasoningCore
 from app.core.config import settings
+from app.intelligence.search import PublicSearch
 from app.memory.semantic_search import SemanticSearch
 from app.models.dto import BrainCitation
 from app.storage.repositories.memory import MemoryRepository
@@ -63,6 +64,19 @@ class BrainService:
             )
         return citations
 
+    @staticmethod
+    def _public_research_query(question: str) -> str:
+        return (
+            "Public web research for the United States Business Council for Sustainable Development "
+            "(US BCSD). Identify organizations that may compete with, overlap with, or serve as close "
+            "peer organizations to US BCSD. Focus on organizations with similar mission, member value "
+            "proposition, services, programs, collaboration model, or sustainability market position. "
+            "For each candidate, look for evidence of overlap. Distinguish direct competitors from "
+            "adjacent peers and do not imply a formal competitive relationship unless the evidence "
+            "supports it. Use current public sources. User question: "
+            + question
+        )
+
     def ask(
         self,
         *,
@@ -88,6 +102,32 @@ class BrainService:
             "result_count": len(retrieved),
         }
 
+        if plan.research_required:
+            research_query = (
+                self._public_research_query(question)
+                if plan.intent == "competitive_analysis"
+                else question
+            )
+            try:
+                external_response = PublicSearch(provider).search(research_query)
+                external_text = (
+                    getattr(external_response, "output_text", None)
+                    or getattr(external_response, "text", None)
+                    or ""
+                ).strip()
+                if external_text:
+                    memory_context["external_research"] = {
+                        "type": "public_web_research",
+                        "question": question,
+                        "findings": external_text,
+                    }
+            except Exception as exc:
+                memory_context["external_research"] = {
+                    "type": "public_web_research",
+                    "question": question,
+                    "status": "unavailable",
+                }
+
         if project_id:
             repository = MemoryRepository(self.organization_id)
             memory_context["project"] = repository.get_project(project_id)
@@ -107,7 +147,7 @@ class BrainService:
 
         answer = ReasoningCore(provider).answer(context)
         if not answer:
-            answer = "The available organizational memory did not produce an answer."
+            answer = "I couldn't find enough information to answer that yet."
 
         return BrainResult(
             question=question,
