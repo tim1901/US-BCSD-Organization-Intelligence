@@ -30,22 +30,18 @@ In Slack App Settings → Event Subscriptions:
 
 The Slack Events API expects the application to acknowledge the event quickly and then process it asynchronously. This application stores the event and queues a worker job.
 
-## 2. Configure the history user token
+## 2. History access
 
-Slack currently restricts `conversations.replies` for public/private channel threads when called with a bot token. This ingestion path therefore uses a separate Slack user token for thread retrieval.
+The ingestion path uses the **bot token** for `conversations.history` and `conversations.replies`.
 
-Request these **user scopes** through the Slack OAuth flow:
+Required bot scopes:
 
 - `channels:history`
 - `groups:history`
 
-The OAuth v2 response exposes the user token under `authed_user.access_token`. Store that value as the Render Worker environment variable:
+The bot must be a member of each channel it is expected to ingest, including private channels.
 
-`SLACK_USER_TOKEN`
-
-Do not paste the token into chat or source control.
-
-The installing user represented by the user token must have access to the private channels you expect to ingest.
+A separate `SLACK_USER_TOKEN` is not required for the current Slack ingestion path. It may remain configured for future user-scoped capabilities, but historical thread ingestion does not depend on it.
 
 ## 3. Confirm the app can see channels
 

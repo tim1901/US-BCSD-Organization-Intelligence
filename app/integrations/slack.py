@@ -125,10 +125,11 @@ class SlackClient:
         )
 
     def replies(self, channel_id: str, thread_ts: str) -> list[dict[str, Any]]:
+        # Bot tokens with channels:history/groups:history can retrieve thread replies
+        # when the bot is a member of the channel.
         return self.paginated(
             "conversations.replies",
             collection_key="messages",
             params={"channel": channel_id, "ts": thread_ts, "include_all_metadata": True},
             limit=100,
-            use_user_token=True,
         )
