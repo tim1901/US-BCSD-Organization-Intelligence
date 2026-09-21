@@ -54,9 +54,10 @@ def run():
             try:
                 process_job(job)
                 repo.mark_completed(job["id"])
-            except Exception:
+            except Exception as exc:
                 logger.exception("Job failed: %s", job["id"])
-                repo.mark_retry(job["id"], "processing_error")
+                detail = f"{type(exc).__name__}: {exc}".strip()
+                repo.mark_retry(job["id"], detail[:1000])
 
 
 if __name__=="__main__":
