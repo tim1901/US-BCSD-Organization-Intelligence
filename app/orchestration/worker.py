@@ -1,4 +1,6 @@
-import logging, time
+import logging
+import re
+import time
 
 from app.brain.service import BrainService
 from app.core.config import settings
@@ -11,23 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 def _format_slack_brain_response(answer: str, citations: list) -> str:
-    if not citations:
-        return answer
+    """Keep Slack replies conversational and free of AI-style formatting or source dumps."""
+    text = (answer or "").strip()
 
-    seen: set[tuple[str | None, str | None]] = set()
-    lines: list[str] = []
-    for citation in citations[:5]:
-        key = (citation.source_id, citation.source_span)
-        if key in seen:
-            continue
-        seen.add(key)
-        title = citation.source_title or "Organizational memory"
-        span = citation.source_span or ""
-        lines.append(f"• {title}" + (f" — {span}" if span else ""))
+    # The conversational prompt should normally prevent this, but normalize common
+    # Markdown artifacts defensively before sending the message to Slack.
+    text = re.sub(r"(?im)^\s*#{1,6}\s*", "", text)
+    text = text.replace("**", "").replace("__", "").replace("`", "")
+    text = re.sub(r"(?m)^\s*[-*•]\s+", "", text)
 
-    if not lines:
-        return answer
-    return answer + "\n\n*Sources*\n" + "\n".join(lines)
+    # Do not expose provenance/source sections in the conversational Slack interface.
+    text = re.split(r"(?im)^\s*(?:sources|citations|evidence)\s*:??\s*$", text, maxsplit=1)[0].rstrip()
+
+    return text
 
 
 def process_job(job: dict):
