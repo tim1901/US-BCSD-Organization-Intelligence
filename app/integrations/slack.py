@@ -56,9 +56,7 @@ class SlackClient:
         params = {key: value for key, value in (params or {}).items() if value is not None}
         client = self.user_client if use_user_token else self.client
         if client is None:
-            raise RuntimeError(
-                "SLACK_USER_TOKEN is required for conversations.replies on public/private channels"
-            )
+            raise RuntimeError("SLACK_USER_TOKEN is required")
         attempts = 0
         while True:
             attempts += 1
@@ -125,11 +123,36 @@ class SlackClient:
         )
 
     def replies(self, channel_id: str, thread_ts: str) -> list[dict[str, Any]]:
-        # Bot tokens with channels:history/groups:history can retrieve thread replies
-        # when the bot is a member of the channel.
         return self.paginated(
             "conversations.replies",
             collection_key="messages",
             params={"channel": channel_id, "ts": thread_ts, "include_all_metadata": True},
             limit=100,
         )
+
+    def post_message(self, channel_id: str, text: str) -> dict[str, Any]:
+        response = self._call(
+            "chat.postMessage",
+            params={"channel": channel_id, "text": text},
+        )
+        return response
+
+    @staticmethod
+    def post_response_url(
+        response_url: str,
+        text: str,
+        *,
+        response_type: str = "in_channel",
+    ) -> None:
+        if not response_url:
+            raise ValueError("Slack response_url is required")
+        response = httpx.post(
+            response_url,
+            json={
+                "response_type": response_type,
+                "replace_original": False,
+                "text": text,
+            },
+            timeout=httpx.Timeout(20.0, connect=10.0),
+        )
+        response.raise_for_status()
