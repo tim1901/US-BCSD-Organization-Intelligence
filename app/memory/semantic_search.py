@@ -54,11 +54,11 @@ class SemanticSearch:
                   AND e.object_type IN ('knowledge_item', 'source_chunk')
                   AND 1 - (e.embedding <=> %(embedding)s::vector) >= %(min_similarity)s
                   AND (
-                      %(channel_id)s IS NULL
+                      %(channel_id)s::text IS NULL
                       OR COALESCE(
                           sk.metadata ->> 'channel_id',
                           ss.metadata ->> 'channel_id'
-                      ) = %(channel_id)s
+                      ) = %(channel_id)s::text
                   )
                 ORDER BY e.embedding <=> %(embedding)s::vector
                 LIMIT %(limit)s
