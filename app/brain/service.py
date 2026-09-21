@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,6 +16,8 @@ from app.memory.semantic_search import SemanticSearch
 from app.models.dto import BrainCitation
 from app.storage.repositories.memory import MemoryRepository
 from app.storage.supabase import connection
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -77,6 +80,42 @@ class BrainService:
             + question
         )
 
+    @staticmethod
+    def _interaction_text(response: Any) -> str:
+        """Extract final model text across current and transitional Interactions SDK shapes."""
+        text = getattr(response, "output_text", None) or getattr(response, "text", None)
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+
+        chunks: list[str] = []
+        for step in getattr(response, "steps", None) or []:
+            if getattr(step, "type", None) != "model_output":
+                continue
+            for block in getattr(step, "content", None) or []:
+                if getattr(block, "type", None) == "text":
+                    value = getattr(block, "text", None)
+                    if isinstance(value, str) and value.strip():
+                        chunks.append(value.strip())
+        return "\n".join(chunks).strip()
+
+    @staticmethod
+    def _interaction_search_evidence(response: Any) -> list[str]:
+        """Capture compact search-result evidence when final model text is absent or thin."""
+        evidence: list[str] = []
+        for step in getattr(response, "steps", None) or []:
+            if getattr(step, "type", None) != "google_search_result":
+                continue
+            for item in getattr(step, "result", None) or []:
+                title = getattr(item, "title", None)
+                url = getattr(item, "url", None)
+                snippet = getattr(item, "snippet", None)
+                if not snippet:
+                    snippet = getattr(item, "search_suggestions", None)
+                parts = [str(value).strip() for value in (title, snippet, url) if value]
+                if parts:
+                    evidence.append(" — ".join(parts))
+        return evidence[:12]
+
     def ask(
         self,
         *,
@@ -110,22 +149,48 @@ class BrainService:
             )
             try:
                 external_response = PublicSearch(provider).search(research_query)
-                external_text = (
-                    getattr(external_response, "output_text", None)
-                    or getattr(external_response, "text", None)
-                    or ""
-                ).strip()
+                external_text = self._interaction_text(external_response)
+                search_evidence = self._interaction_search_evidence(external_response)
+
                 if external_text:
+                    findings = external_text
+                    if search_evidence:
+                        findings += "\n\nSearch evidence:\n" + "\n".join(search_evidence)
                     memory_context["external_research"] = {
                         "type": "public_web_research",
                         "question": question,
-                        "findings": external_text,
+                        "findings": findings,
                     }
+                    logger.info(
+                        "Public research completed intent=%s search_evidence=%s",
+                        plan.intent,
+                        len(search_evidence),
+                    )
+                elif search_evidence:
+                    memory_context["external_research"] = {
+                        "type": "public_web_research",
+                        "question": question,
+                        "findings": "\n".join(search_evidence),
+                    }
+                    logger.info(
+                        "Public research returned search evidence without model synthesis intent=%s evidence=%s",
+                        plan.intent,
+                        len(search_evidence),
+                    )
+                else:
+                    memory_context["external_research"] = {
+                        "type": "public_web_research",
+                        "question": question,
+                        "status": "empty",
+                    }
+                    logger.warning("Public research returned no text or search evidence")
             except Exception as exc:
+                logger.exception("Public research failed for question=%r", question)
                 memory_context["external_research"] = {
                     "type": "public_web_research",
                     "question": question,
                     "status": "unavailable",
+                    "error": f"{type(exc).__name__}: {exc}",
                 }
 
         if project_id:
